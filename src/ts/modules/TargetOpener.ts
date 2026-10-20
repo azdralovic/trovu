@@ -70,27 +70,45 @@ export function decideTargetOpen(
   return { type: "external", url };
 }
 
-/**
- * Opens a target URL according to decideTargetOpen().
- *
- * The "external" handoff uses the web_target window feature, which is the
- * mechanism an installed PWA has to give a URL to the operating system. Browsers
- * that do not support it ignore the feature string and fall back to a normal new
- * window.
- */
-export function openTargetUrl(
-  url: string | undefined | null,
-  environment: TargetOpenEnvironment,
-): TargetOpenAction {
-  const action = decideTargetOpen(url, environment);
-  if (action.type === "navigate") {
-    const navigate =
-      environment.navigate ?? ((target: string) => { window.location.href = target; });
-    navigate(action.url);
-  } else if (action.type === "external") {
-    const openExternal =
-      environment.openExternal ?? ((target: string) => { window.open(target, "_blank", "web_target=menu"); });
-    openExternal(action.url);
+  /**
+   * Opens a target URL according to decideTargetOpen().
+   *
+   * The "external" handoff uses a link with target="_blank", which is the way an installed PWA
+   * hands a URL to the operating system: the device decides whether the URL opens in the default
+   * browser or in the app that is registered for it. Navigating the app window instead
+   * (window.location.href) keeps the target inside the PWA, which is the behaviour this change
+   * is about.
+   */
+  export function openTargetUrl(
+    url: string | undefined | null,
+    environment: TargetOpenEnvironment,
+  ): TargetOpenAction {
+    const action = decideTargetOpen(url, environment);
+    if (action.type === "navigate") {
+      const navigate =
+        environment.navigate ?? ((target: string) => { window.location.href = target; });
+      navigate(action.url);
+    } else if (action.type === "external") {
+      const openExternal =
+        environment.openExternal ?? ((target: string) => { openExternalLink(target); });
+      openExternal(action.url);
+    }
+    return action;
   }
-  return action;
-}
+
+  /**
+   * Hands a URL to the operating system by following a link with target="_blank".
+   *
+   * The link is not attached to the page for long, and it is removed again once it has been
+   * followed, so that it cannot be seen or activated by the user.
+   */
+  export function openExternalLink(url: string): void {
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.hidden = true;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }

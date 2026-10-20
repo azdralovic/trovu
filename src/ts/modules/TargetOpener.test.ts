@@ -1,6 +1,6 @@
 /** @module TargetOpener */
 import { describe, expect, it } from "@jest/globals";
-import { decideTargetOpen, isOutOfScope, openTargetUrl } from "./TargetOpener";
+import { decideTargetOpen, isOutOfScope, openExternalLink, openTargetUrl } from "./TargetOpener";
 
 const APP_ORIGIN = "https://trovu.net";
 
@@ -102,6 +102,19 @@ describe("TargetOpener", () => {
       expect(external).toEqual([]);
     });
 
+    it("keeps the hop to the in-app process page inside the app in standalone mode", () => {
+      const navigated: string[] = [];
+      const external: string[] = [];
+      openTargetUrl("https://trovu.net/process/index.html#query=g", {
+        isStandalone: true,
+        appOrigin: APP_ORIGIN,
+        navigate: (url) => navigated.push(url),
+        openExternal: (url) => external.push(url),
+      });
+      expect(navigated).toEqual(["https://trovu.net/process/index.html#query=g"]);
+      expect(external).toEqual([]);
+    });
+
     it("does nothing without a URL", () => {
       const navigated: string[] = [];
       const external: string[] = [];
@@ -114,6 +127,25 @@ describe("TargetOpener", () => {
       expect(action).toEqual({ type: "none" });
       expect(navigated).toEqual([]);
       expect(external).toEqual([]);
+    });
+  });
+
+  describe("openExternalLink", () => {
+    it("follows a link that opens in a new context and leaves nothing behind", () => {
+      const clicked: string[] = [];
+      const originalClick = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
+        clicked.push(this.href);
+        expect(this.target).toBe("_blank");
+        expect(this.rel).toBe("noopener noreferrer");
+      };
+      try {
+        openExternalLink("https://www.google.com/search?q=test");
+      } finally {
+        HTMLAnchorElement.prototype.click = originalClick;
+      }
+      expect(clicked).toEqual(["https://www.google.com/search?q=test"]);
+      expect(document.querySelectorAll("a[target=\"_blank\"]").length).toBe(0);
     });
   });
 });
